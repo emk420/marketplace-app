@@ -1,6 +1,7 @@
 import React from 'react';
-import { Search, Heart, Package, Tag, DollarSign, Plus } from 'lucide-react';
+import { Search, Heart, Package, Tag, DollarSign, Plus, LogIn, LogOut, User } from 'lucide-react';
 import { Department } from '../types';
+import { useAuth } from '../context/AuthContext';
 
 interface NavbarProps {
   selectedDepartment: Department;
@@ -25,6 +26,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   ordersCount,
   userBalance
 }) => {
+  const { user, userProfile, signIn, signOut } = useAuth();
   const departments: Department[] = ['All', 'Women', 'Men', 'Luxury', 'Bags', 'Vintage'];
 
   return (
@@ -62,6 +64,40 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         {/* Zone 3: 1 primary action */}
         <div className="flex items-center gap-3 shrink-0">
+          {user ? (
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => onOpenOrdersModal('payouts')}
+                className="flex items-center gap-1.5 p-1 rounded-full hover:bg-stone-100 transition-colors cursor-pointer"
+                title={user.email || 'My Closet Account'}
+              >
+                <img
+                  src={user.photoURL || userProfile?.avatar || 'https://images.unsplash.com/photo-1534528741775-53994a69daeb?auto=format&fit=crop&w=300&q=80'}
+                  alt={user.displayName || 'User'}
+                  className="w-7 h-7 rounded-full object-cover border border-stone-300"
+                />
+                <span className="hidden sm:inline text-xs font-semibold text-stone-800 max-w-[100px] truncate">
+                  {user.displayName?.split(' ')[0] || userProfile?.handle || 'My Closet'}
+                </span>
+              </button>
+              <button
+                onClick={signOut}
+                className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
+                title="Sign Out"
+              >
+                <LogOut className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          ) : (
+            <button
+              onClick={signIn}
+              className="px-3 py-1.5 text-xs font-semibold text-stone-800 bg-stone-100 hover:bg-stone-200 border border-stone-300 rounded-lg transition-colors whitespace-nowrap shrink-0 flex items-center gap-1.5 cursor-pointer"
+            >
+              <LogIn className="w-3.5 h-3.5 text-rose-600" />
+              <span>Sign In with Google</span>
+            </button>
+          )}
+
           <button
             onClick={onOpenSellModal}
             className="px-4 py-2 text-xs font-semibold text-white bg-rose-600 hover:bg-rose-700 rounded-lg transition-colors whitespace-nowrap shrink-0 shadow-xs flex items-center gap-1.5 cursor-pointer"
@@ -130,3 +166,4 @@ export const Navbar: React.FC<NavbarProps> = ({
     </header>
   );
 };
+

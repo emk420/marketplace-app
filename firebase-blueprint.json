@@ -1,0 +1,129 @@
+{
+  "entities": {
+    "Item": {
+      "title": "Item",
+      "description": "A second-hand fashion item listed in the marketplace",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string", "maxLength": 150 },
+        "description": { "type": "string", "maxLength": 2000 },
+        "brand": { "type": "string", "maxLength": 100 },
+        "department": { "type": "string", "enum": ["Women", "Men", "Kids", "Luxury", "Bags", "Shoes", "Vintage"] },
+        "category": { "type": "string", "maxLength": 100 },
+        "size": { "type": "string", "maxLength": 50 },
+        "condition": { "type": "string", "enum": ["NWT (New with Tags)", "Like New", "Gently Used", "Good Condition"] },
+        "color": { "type": "string", "maxLength": 50 },
+        "originalPrice": { "type": "number" },
+        "listingPrice": { "type": "number" },
+        "discountedShipping": { "type": "boolean" },
+        "photos": { "type": "array" },
+        "sellerId": { "type": "string", "maxLength": 128 },
+        "sellerName": { "type": "string", "maxLength": 100 },
+        "sellerHandle": { "type": "string", "maxLength": 100 },
+        "sellerAvatar": { "type": "string", "maxLength": 500 },
+        "sellerRating": { "type": "number" },
+        "sellerSalesCount": { "type": "number" },
+        "sellerAvgShipDays": { "type": "number" },
+        "likes": { "type": "number" },
+        "shares": { "type": "number" },
+        "inStock": { "type": "boolean" },
+        "fabric": { "type": "string", "maxLength": 200 },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "title", "brand", "department", "listingPrice", "sellerId", "condition"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "A completed or pending escrow order with shipping tracking",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "orderNumber": { "type": "string", "maxLength": 50 },
+        "itemId": { "type": "string", "maxLength": 128 },
+        "itemTitle": { "type": "string", "maxLength": 150 },
+        "itemPhoto": { "type": "string", "maxLength": 500 },
+        "itemBrand": { "type": "string", "maxLength": 100 },
+        "itemSize": { "type": "string", "maxLength": 50 },
+        "itemPrice": { "type": "number" },
+        "shippingCost": { "type": "number" },
+        "salesTax": { "type": "number" },
+        "totalAmount": { "type": "number" },
+        "netPayoutToSeller": { "type": "number" },
+        "buyerId": { "type": "string", "maxLength": 128 },
+        "buyerName": { "type": "string", "maxLength": 100 },
+        "buyerHandle": { "type": "string", "maxLength": 100 },
+        "sellerId": { "type": "string", "maxLength": 128 },
+        "sellerName": { "type": "string", "maxLength": 100 },
+        "sellerHandle": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string", "enum": ["Payment Authorized", "Label Generated", "Shipped / In Transit", "Delivered", "Accepted & Funds Released"] },
+        "trackingNumber": { "type": "string", "maxLength": 100 },
+        "carrier": { "type": "string", "maxLength": 50 },
+        "packageWeight": { "type": "string", "maxLength": 50 },
+        "serviceTier": { "type": "string", "maxLength": 100 },
+        "paymentMethod": { "type": "string", "maxLength": 100 },
+        "paymentEscrowProtected": { "type": "boolean" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "orderNumber", "itemId", "itemPrice", "buyerId", "sellerId", "status", "trackingNumber"]
+    },
+    "Offer": {
+      "title": "Offer",
+      "description": "A price negotiation offer between buyer and seller",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "itemId": { "type": "string", "maxLength": 128 },
+        "itemTitle": { "type": "string", "maxLength": 150 },
+        "itemPhoto": { "type": "string", "maxLength": 500 },
+        "itemBrand": { "type": "string", "maxLength": 100 },
+        "itemSize": { "type": "string", "maxLength": 50 },
+        "originalListingPrice": { "type": "number" },
+        "offeredPrice": { "type": "number" },
+        "buyerId": { "type": "string", "maxLength": 128 },
+        "buyerHandle": { "type": "string", "maxLength": 100 },
+        "buyerName": { "type": "string", "maxLength": 100 },
+        "sellerId": { "type": "string", "maxLength": 128 },
+        "sellerHandle": { "type": "string", "maxLength": 100 },
+        "status": { "type": "string", "enum": ["pending", "accepted", "declined", "countered"] },
+        "createdAt": { "type": "string" },
+        "expiresAt": { "type": "string" }
+      },
+      "required": ["id", "itemId", "offeredPrice", "buyerId", "sellerId", "status"]
+    },
+    "UserProfile": {
+      "title": "UserProfile",
+      "description": "User profile with personal balance and shipping preferences",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "handle": { "type": "string", "maxLength": 50 },
+        "name": { "type": "string", "maxLength": 100 },
+        "email": { "type": "string", "maxLength": 150 },
+        "avatar": { "type": "string", "maxLength": 500 },
+        "balance": { "type": "number" },
+        "poshCredits": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "email"]
+    }
+  },
+  "firestore": {
+    "/items/{itemId}": {
+      "schema": { "$ref": "#/entities/Item" },
+      "description": "Marketplace clothing listings"
+    },
+    "/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/Order" },
+      "description": "Buyer and seller escrow orders"
+    },
+    "/offers/{offerId}": {
+      "schema": { "$ref": "#/entities/Offer" },
+      "description": "Negotiation offers"
+    },
+    "/users/{userId}/profile/info": {
+      "schema": { "$ref": "#/entities/UserProfile" },
+      "description": "Private user account profile and balance"
+    }
+  }
+}

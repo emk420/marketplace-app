@@ -40,8 +40,21 @@ import { ClosetViewModal } from './components/ClosetViewModal';
 import { ShippingLabelModal } from './components/ShippingLabelModal';
 import { SellItemModal } from './components/SellItemModal';
 import { OrderManagementModal } from './components/OrderManagementModal';
+import { AuthProvider, useAuth } from './context/AuthContext';
+import {
+  initializeMarketplaceData,
+  subscribeToItems,
+  saveItemToFirestore,
+  updateItemInteraction,
+  saveOrderToFirestore,
+  updateOrderStatusInFirestore,
+  saveOfferToFirestore,
+  updateOfferStatusInFirestore
+} from './services/marketplaceService';
 
-export default function App() {
+function MarketplaceApp() {
+  const { user, userProfile, updateBalance } = useAuth();
+
   // State Initialization with LocalStorage fallbacks
   const [items, setItems] = useState<Item[]>(() => {
     const saved = localStorage.getItem('posh_items');
@@ -67,6 +80,29 @@ export default function App() {
     const saved = localStorage.getItem('posh_balance');
     return saved ? parseFloat(saved) : CURRENT_USER.balance;
   });
+
+  // Sync user profile balance if logged in
+  useEffect(() => {
+    if (userProfile?.balance !== undefined) {
+      setUserBalance(userProfile.balance);
+    }
+  }, [userProfile]);
+
+  // Real-time Firestore synchronization
+  useEffect(() => {
+    initializeMarketplaceData().catch(console.error);
+
+    const unsubscribe = subscribeToItems(
+      (firestoreItems) => {
+        if (firestoreItems && firestoreItems.length > 0) {
+          setItems(firestoreItems);
+        }
+      },
+      (err) => console.warn('Using local items cache:', err)
+    );
+
+    return () => unsubscribe();
+  }, []);
 
   // Filter & Search States
   const [selectedDepartment, setSelectedDepartment] = useState<Department>('All');
@@ -122,11 +158,14 @@ export default function App() {
       const next = isAlreadyLiked ? prev.filter((id) => id !== itemId) : [...prev, itemId];
       // update item like count
       setItems((prevItems) =>
-        prevItems.map((it) =>
-          it.id === itemId
-            ? { ...it, likes: isAlreadyLiked ? Math.max(0, it.likes - 1) : it.likes + 1 }
-            : it
-        )
+        prevItems.map((it) => {
+          if (it.id === itemId) {
+            const updatedLikes = isAlreadyLiked ? Math.max(0, it.likes - 1) : it.likes + 1;
+            updateItemInteraction(itemId, updatedLikes, it.shares).catch(console.error);
+            return { ...it, likes: updatedLikes };
+          }
+          return it;
+        })
       );
       return next;
     });
@@ -134,22 +173,46 @@ export default function App() {
 
   const handleOrderCompleted = (newOrder: Order) => {
     setOrders((prev) => [newOrder, ...prev]);
+    saveOrderToFirestore(newOrder).catch(console.error);
     showToast(`Order #${newOrder.orderNumber} confirmed! Escrow authorized with USPS Priority.`);
   };
 
   const handleItemCreated = (newItem: Item) => {
-    setItems((prev) => [newItem, ...prev]);
-    showToast(`"${newItem.title}" is live in your closet!`);
+    // Inject active user attributes if logged in
+    const finalItem: Item = {
+      ...newItem,
+      sellerId: user?.uid || newItem.sellerId,
+      sellerName: user?.displayName || userProfile?.name || newItem.sellerName,
+      sellerHandle: userProfile?.handle || newItem.sellerHandle,
+      sellerAvatar: user?.photoURL || userProfile?.avatar || newItem.sellerAvatar,
+    };
+    setItems((prev) => [finalItem, ...prev]);
+    saveItemToFirestore(finalItem).catch(console.error);
+    showToast(`"${finalItem.title}" is live in your closet and synced to Firestore!`);
   };
 
   const handleOfferSubmitted = (newOffer: Offer) => {
-    setOffers((prev) => [newOffer, ...prev]);
-    showToast(`Offer of $${newOffer.offeredPrice} submitted to ${newOffer.sellerHandle}!`);
+    const finalOffer: Offer = {
+      ...newOffer,
+      buyerId: user?.uid || newOffer.buyerId,
+      buyerHandle: userProfile?.handle || newOffer.buyerHandle,
+      buyerName: user?.displayName || userProfile?.name || newOffer.buyerName,
+    };
+    setOffers((prev) => [finalOffer, ...prev]);
+    saveOfferToFirestore(finalOffer).catch(console.error);
+    showToast(`Offer of $${finalOffer.offeredPrice} submitted to ${finalOffer.sellerHandle}!`);
   };
 
   const handleItemShared = (itemId: string, destination: string) => {
     setItems((prev) =>
-      prev.map((it) => (it.id === itemId ? { ...it, shares: it.shares + 1 } : it))
+      prev.map((it) => {
+        if (it.id === itemId) {
+          const updatedShares = it.shares + 1;
+          updateItemInteraction(itemId, it.likes, updatedShares).catch(console.error);
+          return { ...it, shares: updatedShares };
+        }
+        return it;
+      })
     );
     showToast(`Shared to ${destination}!`);
   };
@@ -162,6 +225,7 @@ export default function App() {
           : ord
       )
     );
+    updateOrderStatusInFirestore(orderId, 'Shipped / In Transit', { shippedAt: 'Just now' }).catch(console.error);
     showToast('Package marked as shipped! USPS tracking activated.');
   };
 
@@ -169,7 +233,6 @@ export default function App() {
     setOrders((prev) =>
       prev.map((ord) => {
         if (ord.id === orderId) {
-          // If current user is the buyer, release funds to the seller balance
           return {
             ...ord,
             status: 'Accepted & Funds Released',
@@ -181,10 +244,17 @@ export default function App() {
       })
     );
 
+    updateOrderStatusInFirestore(orderId, 'Accepted & Funds Released', {
+      buyerRating: rating,
+      buyerLoveNote: loveNote
+    }).catch(console.error);
+
     // If this was a sale where current user is the seller, add to user balance
     const targetOrder = orders.find((o) => o.id === orderId);
-    if (targetOrder && targetOrder.sellerId === CURRENT_USER.id) {
-      setUserBalance((b) => b + targetOrder.netPayoutToSeller);
+    if (targetOrder && targetOrder.sellerId === (user?.uid || CURRENT_USER.id)) {
+      const nextBal = userBalance + targetOrder.netPayoutToSeller;
+      setUserBalance(nextBal);
+      updateBalance(nextBal).catch(console.error);
     }
 
     showToast('Order accepted! Escrow funds released to seller.');
@@ -194,6 +264,7 @@ export default function App() {
     setOffers((prev) =>
       prev.map((off) => (off.id === offerId ? { ...off, status: 'accepted' } : off))
     );
+    updateOfferStatusInFirestore(offerId, 'accepted').catch(console.error);
     showToast('Offer accepted! Buyer will be prompted to finalize.');
   };
 
@@ -201,11 +272,13 @@ export default function App() {
     setOffers((prev) =>
       prev.map((off) => (off.id === offerId ? { ...off, status: 'declined' } : off))
     );
+    updateOfferStatusInFirestore(offerId, 'declined').catch(console.error);
     showToast('Offer declined.');
   };
 
   const handleWithdrawFunds = (amount: number) => {
     setUserBalance(0);
+    updateBalance(0).catch(console.error);
     showToast(`$${amount.toFixed(2)} transfer initiated to your verified checking account.`);
   };
 
@@ -690,5 +763,13 @@ export default function App() {
         />
       )}
     </div>
+  );
+}
+
+export default function App() {
+  return (
+    <AuthProvider>
+      <MarketplaceApp />
+    </AuthProvider>
   );
 }

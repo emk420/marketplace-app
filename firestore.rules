@@ -1,0 +1,99 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Global Safety Net: Default Deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Helper functions
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    // 1. Marketplace Items (Public Catalog)
+    match /items/{itemId} {
+      allow read: if true;
+
+      allow create: if isSignedIn() && isValidId(itemId)
+        && incoming().sellerId == request.auth.uid
+        && incoming().title is string && incoming().title.size() <= 150
+        && incoming().listingPrice is number && incoming().listingPrice > 0;
+
+      allow update: if isSignedIn() && (
+        // Seller updating listing details
+        (existing().sellerId == request.auth.uid) ||
+        // Other users liking or sharing (atomic interaction fields)
+        (incoming().diff(existing()).affectedKeys().hasOnly(['likes', 'shares']))
+      );
+
+      allow delete: if isSignedIn() && existing().sellerId == request.auth.uid;
+    }
+
+    // 2. Orders (Escrow & Shipping)
+    match /orders/{orderId} {
+      allow read: if isSignedIn() && (
+        resource.data.buyerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid
+      );
+
+      allow create: if isSignedIn() && isValidId(orderId)
+        && incoming().buyerId == request.auth.uid
+        && incoming().itemPrice is number
+        && incoming().orderNumber is string;
+
+      allow update: if isSignedIn() && (
+        resource.data.buyerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid
+      );
+
+      allow delete: if false;
+    }
+
+    // 3. Offers (Price Negotiations)
+    match /offers/{offerId} {
+      allow read: if isSignedIn() && (
+        resource.data.buyerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid
+      );
+
+      allow create: if isSignedIn() && isValidId(offerId)
+        && incoming().buyerId == request.auth.uid
+        && incoming().offeredPrice is number;
+
+      allow update: if isSignedIn() && (
+        resource.data.buyerId == request.auth.uid ||
+        resource.data.sellerId == request.auth.uid
+      );
+
+      allow delete: if false;
+    }
+
+    // 4. Private User Profiles & Accounts (PII Isolation)
+    match /users/{userId}/profile/info {
+      allow read, write: if isOwner(userId) && isValidId(userId);
+    }
+
+    // 5. Connection Test Collection (Used on boot)
+    match /test/{docId} {
+      allow read: if true;
+    }
+  }
+}
