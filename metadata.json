@@ -1,0 +1,6 @@
+{
+  "name": "PoshPop - Second-Hand Fashion Marketplace",
+  "description": "Buy and sell authenticated pre-loved clothing, designer bags, and streetwear with secure escrow payments and built-in USPS shipping label generation.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
