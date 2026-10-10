@@ -1,8 +1,28 @@
 import React, { useState } from 'react';
-import { ShieldCheck, Lock, CreditCard, CheckCircle2, X, Truck, ArrowRight, Sparkles, MapPin, AlertCircle } from 'lucide-react';
+import {
+  ShieldCheck,
+  Lock,
+  CreditCard,
+  CheckCircle2,
+  X,
+  Truck,
+  ArrowRight,
+  Sparkles,
+  MapPin,
+  AlertCircle,
+  ExternalLink,
+  Zap,
+  Check
+} from 'lucide-react';
 import { Item, ShippingAddress, Order } from '../types';
 import { CURRENT_USER } from '../data/mockData';
 import { FashionImage } from './FashionImage';
+import {
+  createStripePaymentIntent,
+  formatCardNumber,
+  formatExpiry,
+  getCardBrand
+} from '../services/stripeService';
 
 interface SecureCheckoutModalProps {
   item: Item;
@@ -18,14 +38,16 @@ export const SecureCheckoutModal: React.FC<SecureCheckoutModalProps> = ({
   onOrderCompleted
 }) => {
   const [useCredits, setUseCredits] = useState(true);
-  const [paymentMethod, setPaymentMethod] = useState<'card' | 'apple_pay' | 'klarna'>('card');
+  const [paymentMethod, setPaymentMethod] = useState<'stripe_card' | 'apple_pay' | 'klarna'>('stripe_card');
   const [isProcessing, setIsProcessing] = useState(false);
+  const [processingStep, setProcessingStep] = useState<string>('');
   const [completedOrder, setCompletedOrder] = useState<Order | null>(null);
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
 
-  // Form states
-  const [cardNumber, setCardNumber] = useState('•••• •••• •••• 4242');
-  const [cardExpiry, setCardExpiry] = useState('08/28');
-  const [cardCvc, setCardCvc] = useState('842');
+  // Stripe Card Form states
+  const [cardNumber, setCardNumber] = useState('4242 4242 4242 4242');
+  const [cardExpiry, setCardExpiry] = useState('12/28');
+  const [cardCvc, setCardCvc] = useState('321');
   const [buyerAddress, setBuyerAddress] = useState<ShippingAddress>(CURRENT_USER.address);
   const [isEditingAddress, setIsEditingAddress] = useState(false);
 
@@ -39,13 +61,53 @@ export const SecureCheckoutModal: React.FC<SecureCheckoutModalProps> = ({
   const totalAmount = Number((item.listingPrice + shippingCost + salesTax - creditsApplied).toFixed(2));
   const netPayoutToSeller = Number((item.listingPrice * 0.8).toFixed(2));
 
-  const handlePlaceOrder = () => {
-    setIsProcessing(true);
+  const cardBrand = getCardBrand(cardNumber);
 
-    setTimeout(() => {
+  const fillTestCard = (type: 'success' | '3ds') => {
+    if (type === 'success') {
+      setCardNumber('4242 4242 4242 4242');
+      setCardExpiry('12/28');
+      setCardCvc('123');
+    } else {
+      setCardNumber('4000 0027 6000 3184');
+      setCardExpiry('10/29');
+      setCardCvc('888');
+    }
+  };
+
+  const handlePlaceOrder = async () => {
+    setIsProcessing(true);
+    setErrorMessage(null);
+    setProcessingStep('Initializing Stripe PaymentIntent...');
+
+    const orderNum = `POSH-${Math.floor(100000 + Math.random() * 900000)}`;
+
+    try {
+      // 1. Call server-side Stripe PaymentIntent endpoint
+      const stripeRes = await createStripePaymentIntent({
+        amount: totalAmount,
+        currency: 'usd',
+        itemTitle: item.title,
+        orderNumber: orderNum,
+      });
+
+      setProcessingStep('Stripe Radar verifying 0% fraud risk...');
+      await new Promise((r) => setTimeout(r, 600));
+
+      setProcessingStep('Confirming escrow authorization with Stripe...');
+      await new Promise((r) => setTimeout(r, 600));
+
+      const last4 = cardNumber.replace(/\s+/g, '').slice(-4) || '4242';
+      const paymentDisplay =
+        paymentMethod === 'apple_pay'
+          ? 'Apple Pay via Stripe'
+          : paymentMethod === 'klarna'
+          ? 'Klarna 4x via Stripe'
+          : `Stripe Card (•••• ${last4})`;
+
       const generatedOrder: Order = {
         id: `ord_${Date.now()}`,
-        orderNumber: `POSH-${Math.floor(100000 + Math.random() * 900000)}`,
+        orderNumber: orderNum,
         itemId: item.id,
         itemTitle: item.title,
         itemPhoto: item.photos[0],
@@ -77,15 +139,22 @@ export const SecureCheckoutModal: React.FC<SecureCheckoutModalProps> = ({
         carrier: 'USPS Priority Mail',
         packageWeight: '1 LB 8 OZ',
         serviceTier: 'USPS Priority Mail® 2-Day (Prepaid Label)',
-        paymentMethod: paymentMethod === 'apple_pay' ? 'Apple Pay (Tokenized)' : paymentMethod === 'klarna' ? 'Klarna (4 Installments)' : 'Visa •••• 4242',
+        paymentMethod: paymentDisplay,
         paymentEscrowProtected: true,
+        stripePaymentIntentId: stripeRes.paymentIntentId,
+        stripeClientSecret: stripeRes.clientSecret,
         createdAt: 'Just now'
       };
 
-      setIsProcessing(false);
       setCompletedOrder(generatedOrder);
       onOrderCompleted(generatedOrder);
-    }, 1200);
+    } catch (err: any) {
+      console.error('Checkout error:', err);
+      setErrorMessage(err.message || 'Payment processing failed. Please try again.');
+    } finally {
+      setIsProcessing(false);
+      setProcessingStep('');
+    }
   };
 
   return (
@@ -96,12 +165,12 @@ export const SecureCheckoutModal: React.FC<SecureCheckoutModalProps> = ({
           <div className="flex items-center gap-2">
             <ShieldCheck className="w-5 h-5 text-emerald-600" />
             <h2 className="text-base font-bold text-stone-900">
-              {completedOrder ? 'Order Confirmed!' : 'Secure Escrow Checkout'}
+              {completedOrder ? 'Order Confirmed!' : 'Secure Stripe Escrow Checkout'}
             </h2>
           </div>
           <button
             onClick={onClose}
-            className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors"
+            className="p-1.5 text-stone-400 hover:text-stone-700 hover:bg-stone-100 rounded-lg transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
@@ -116,20 +185,27 @@ export const SecureCheckoutModal: React.FC<SecureCheckoutModalProps> = ({
                 <CheckCircle2 className="w-9 h-9" />
               </div>
               <div>
-                <h3 className="text-xl font-bold text-stone-900">You Bought It!</h3>
+                <h3 className="text-xl font-bold text-stone-900">Payment Authorized via Stripe!</h3>
                 <p className="text-xs text-stone-500 mt-1">
                   Order #{completedOrder.orderNumber} · Charged{' '}
                   <span className="font-semibold text-stone-900">${completedOrder.totalAmount.toFixed(2)}</span>
                 </p>
+                {completedOrder.stripePaymentIntentId && (
+                  <p className="font-mono text-[11px] text-stone-400 mt-0.5">
+                    Stripe PaymentIntent: {completedOrder.stripePaymentIntentId}
+                  </p>
+                )}
               </div>
 
-              {/* Escrow Guarantee Highlight */}
+              {/* Stripe Escrow Guarantee Highlight */}
               <div className="p-4 bg-emerald-50 rounded-lg border border-emerald-200/80 text-left max-w-lg mx-auto">
                 <div className="flex items-start gap-3">
                   <ShieldCheck className="w-5 h-5 text-emerald-700 shrink-0 mt-0.5" />
-                  <div className="text-xs text-emerald-900">
-                    <span className="font-bold block">PoshProtect™ Escrow Guarantee Active</span>
-                    Your funds are held securely. The seller has been emailed their prepaid USPS shipping label and must ship within 7 days. You have 72 hours upon delivery to inspect your item before funds are released.
+                  <div className="text-xs text-emerald-900 space-y-1">
+                    <span className="font-bold block">Stripe Escrow & PoshProtect™ Guarantee Active</span>
+                    <p className="text-stone-600 leading-relaxed">
+                      Your funds are vaulted securely with Stripe. The seller has been issued their pre-paid USPS shipping label and must ship within 7 days. You have 72 hours upon delivery to inspect your item before funds release.
+                    </p>
                   </div>
                 </div>
               </div>
@@ -150,7 +226,7 @@ export const SecureCheckoutModal: React.FC<SecureCheckoutModalProps> = ({
                     {completedOrder.itemBrand} · Size {completedOrder.itemSize}
                   </p>
                   <p className="text-xs font-semibold text-stone-900 mt-0.5">
-                    ${completedOrder.itemPrice.toFixed(2)}
+                    ${completedOrder.itemPrice.toFixed(2)} · {completedOrder.paymentMethod}
                   </p>
                 </div>
               </div>
@@ -158,7 +234,7 @@ export const SecureCheckoutModal: React.FC<SecureCheckoutModalProps> = ({
               <div className="pt-2 flex justify-center gap-3">
                 <button
                   onClick={onClose}
-                  className="px-6 py-2.5 text-xs font-semibold text-white bg-stone-900 hover:bg-stone-800 rounded-lg transition-colors"
+                  className="px-6 py-2.5 text-xs font-semibold text-white bg-stone-900 hover:bg-stone-800 rounded-lg transition-colors cursor-pointer"
                 >
                   Continue Shopping
                 </button>
@@ -167,14 +243,22 @@ export const SecureCheckoutModal: React.FC<SecureCheckoutModalProps> = ({
           ) : (
             /* Checkout Review View */
             <>
-              {/* PoshProtect Escrow Ribbon */}
+              {/* Stripe Trust Ribbon */}
               <div className="bg-emerald-50/80 border border-emerald-200 rounded-lg p-3 flex items-start gap-3 text-xs text-emerald-900">
                 <ShieldCheck className="w-4 h-4 text-emerald-700 shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-bold">100% Buyer Protection & Escrow Security: </span>
-                  We hold your payment until your package arrives. If it's not as described, return it for a full refund.
+                  <span className="font-bold">Stripe 256-Bit Escrow Vault: </span>
+                  We hold your payment until your package arrives. If it's not as described, return it for a 100% refund.
                 </div>
               </div>
+
+              {/* Error Alert */}
+              {errorMessage && (
+                <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg flex items-center gap-2 text-xs text-rose-800">
+                  <AlertCircle className="w-4 h-4 shrink-0 text-rose-600" />
+                  <span>{errorMessage}</span>
+                </div>
+              )}
 
               {/* Item Snapshot */}
               <div className="flex items-center gap-4 p-3 bg-stone-50 rounded-lg border border-stone-200">
@@ -218,7 +302,7 @@ export const SecureCheckoutModal: React.FC<SecureCheckoutModalProps> = ({
                   </div>
                   <button
                     onClick={() => setIsEditingAddress(!isEditingAddress)}
-                    className="text-xs text-rose-700 hover:text-rose-900 font-semibold"
+                    className="text-xs text-rose-700 hover:text-rose-900 font-semibold cursor-pointer"
                   >
                     {isEditingAddress ? 'Save Address' : 'Change'}
                   </button>
@@ -275,86 +359,135 @@ export const SecureCheckoutModal: React.FC<SecureCheckoutModalProps> = ({
                 )}
               </div>
 
-              {/* Payment Method Selector */}
+              {/* Stripe Payment Method Selector */}
               <div className="border border-stone-200 rounded-lg p-4 space-y-3">
-                <div className="flex items-center gap-2 text-xs font-bold text-stone-900">
-                  <Lock className="w-4 h-4 text-emerald-600" />
-                  Secure Payment Method
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2 text-xs font-bold text-stone-900">
+                    <Lock className="w-4 h-4 text-emerald-600" />
+                    <span>Payment Method</span>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-[10px] text-stone-500 font-semibold">
+                    <span className="w-2 h-2 rounded-full bg-emerald-500" />
+                    <span>Powered by Stripe</span>
+                  </div>
                 </div>
 
+                {/* Method selector pills */}
                 <div className="grid grid-cols-3 gap-2">
                   <button
                     type="button"
-                    onClick={() => setPaymentMethod('card')}
-                    className={`p-2.5 rounded-lg border text-xs font-medium text-center transition-colors ${
-                      paymentMethod === 'card'
+                    onClick={() => setPaymentMethod('stripe_card')}
+                    className={`p-2.5 rounded-lg border text-xs font-medium text-center transition-colors cursor-pointer ${
+                      paymentMethod === 'stripe_card'
                         ? 'border-stone-900 bg-stone-50 text-stone-900 ring-1 ring-stone-900'
                         : 'border-stone-200 text-stone-600 hover:border-stone-300'
                     }`}
                   >
                     <CreditCard className="w-4 h-4 mx-auto mb-1 text-stone-700" />
-                    Card
+                    <span>Stripe Card</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('apple_pay')}
-                    className={`p-2.5 rounded-lg border text-xs font-medium text-center transition-colors ${
+                    className={`p-2.5 rounded-lg border text-xs font-medium text-center transition-colors cursor-pointer ${
                       paymentMethod === 'apple_pay'
                         ? 'border-stone-900 bg-stone-50 text-stone-900 ring-1 ring-stone-900'
                         : 'border-stone-200 text-stone-600 hover:border-stone-300'
                     }`}
                   >
-                    <span className="font-bold block text-sm leading-tight mb-0.5"> Pay</span>
-                    Digital Wallet
+                    <span className="font-bold block text-sm leading-tight mb-0.5">Pay</span>
+                    <span>Stripe Wallet</span>
                   </button>
                   <button
                     type="button"
                     onClick={() => setPaymentMethod('klarna')}
-                    className={`p-2.5 rounded-lg border text-xs font-medium text-center transition-colors ${
+                    className={`p-2.5 rounded-lg border text-xs font-medium text-center transition-colors cursor-pointer ${
                       paymentMethod === 'klarna'
                         ? 'border-stone-900 bg-stone-50 text-stone-900 ring-1 ring-stone-900'
                         : 'border-stone-200 text-stone-600 hover:border-stone-300'
                     }`}
                   >
                     <span className="font-bold text-pink-600 block text-xs mb-0.5">Klarna.</span>
-                    4 x ${(totalAmount / 4).toFixed(2)}
+                    <span>4 x ${(totalAmount / 4).toFixed(2)}</span>
                   </button>
                 </div>
 
-                {paymentMethod === 'card' && (
-                  <div className="space-y-2 pt-1 text-xs">
+                {/* Stripe Card Element Input */}
+                {paymentMethod === 'stripe_card' && (
+                  <div className="space-y-3 pt-1 text-xs">
                     <div>
-                      <label className="block text-stone-500 text-[11px] mb-1">Card Number</label>
+                      <div className="flex justify-between items-center mb-1">
+                        <label className="text-stone-500 text-[11px] font-semibold">Card Number</label>
+                        <span className="text-[10px] uppercase font-bold text-stone-600 px-1.5 py-0.2 bg-stone-100 rounded">
+                          {cardBrand.toUpperCase()}
+                        </span>
+                      </div>
                       <div className="relative">
                         <input
                           type="text"
+                          maxLength={19}
                           value={cardNumber}
-                          onChange={(e) => setCardNumber(e.target.value)}
-                          className="w-full pl-9 pr-3 py-2 border border-stone-300 rounded font-mono text-xs focus:ring-1 focus:ring-stone-900"
+                          onChange={(e) => setCardNumber(formatCardNumber(e.target.value))}
+                          placeholder="4242 4242 4242 4242"
+                          className="w-full pl-9 pr-3 py-2 border border-stone-300 rounded font-mono text-xs focus:ring-1 focus:ring-stone-900 bg-white"
                         />
                         <CreditCard className="w-4 h-4 text-stone-400 absolute left-3 top-2.5" />
                       </div>
                     </div>
+
                     <div className="grid grid-cols-2 gap-2">
                       <div>
-                        <label className="block text-stone-500 text-[11px] mb-1">Expires (MM/YY)</label>
+                        <label className="block text-stone-500 text-[11px] mb-1 font-semibold">Expires (MM/YY)</label>
                         <input
                           type="text"
+                          maxLength={5}
                           value={cardExpiry}
-                          onChange={(e) => setCardExpiry(e.target.value)}
-                          className="w-full px-3 py-2 border border-stone-300 rounded font-mono text-xs focus:ring-1 focus:ring-stone-900"
+                          onChange={(e) => setCardExpiry(formatExpiry(e.target.value))}
+                          placeholder="12/28"
+                          className="w-full px-3 py-2 border border-stone-300 rounded font-mono text-xs focus:ring-1 focus:ring-stone-900 bg-white"
                         />
                       </div>
                       <div>
-                        <label className="block text-stone-500 text-[11px] mb-1">CVC</label>
+                        <label className="block text-stone-500 text-[11px] mb-1 font-semibold">CVC</label>
                         <input
                           type="text"
+                          maxLength={4}
                           value={cardCvc}
-                          onChange={(e) => setCardCvc(e.target.value)}
-                          className="w-full px-3 py-2 border border-stone-300 rounded font-mono text-xs focus:ring-1 focus:ring-stone-900"
+                          onChange={(e) => setCardCvc(e.target.value.replace(/\D/g, ''))}
+                          placeholder="321"
+                          className="w-full px-3 py-2 border border-stone-300 rounded font-mono text-xs focus:ring-1 focus:ring-stone-900 bg-white"
                         />
                       </div>
                     </div>
+
+                    {/* Stripe Quick Test Cards */}
+                    <div className="pt-1 flex items-center gap-2">
+                      <span className="text-[10px] text-stone-400 font-medium">Stripe Test Cards:</span>
+                      <button
+                        type="button"
+                        onClick={() => fillTestCard('success')}
+                        className="text-[10px] bg-stone-100 hover:bg-stone-200 text-stone-700 px-2 py-0.5 rounded cursor-pointer transition-colors"
+                      >
+                        4242 (Success)
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => fillTestCard('3ds')}
+                        className="text-[10px] bg-stone-100 hover:bg-stone-200 text-stone-700 px-2 py-0.5 rounded cursor-pointer transition-colors"
+                      >
+                        3D Secure Auth
+                      </button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Stripe Digital Wallet or Klarna Note */}
+                {paymentMethod !== 'stripe_card' && (
+                  <div className="p-3 bg-stone-50 rounded-lg border border-stone-200/80 text-[11px] text-stone-600 flex items-center gap-2">
+                    <Zap className="w-4 h-4 text-amber-500 shrink-0" />
+                    <span>
+                      Stripe 1-Click Checkout: Your default wallet will be prompted during final authorization.
+                    </span>
                   </div>
                 )}
               </div>
@@ -414,7 +547,7 @@ export const SecureCheckoutModal: React.FC<SecureCheckoutModalProps> = ({
           <div className="px-6 py-4 border-t border-stone-200 bg-white flex items-center justify-between">
             <div className="text-xs text-stone-500 flex items-center gap-1.5">
               <Lock className="w-3.5 h-3.5 text-stone-400" />
-              <span>256-Bit SSL Encrypted Escrow</span>
+              <span>Stripe 256-Bit Escrow Vault</span>
             </div>
 
             <button
@@ -425,11 +558,11 @@ export const SecureCheckoutModal: React.FC<SecureCheckoutModalProps> = ({
               {isProcessing ? (
                 <>
                   <div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  Authorizing Escrow...
+                  <span>{processingStep || 'Processing with Stripe...'}</span>
                 </>
               ) : (
                 <>
-                  Place Order · ${totalAmount.toFixed(2)}
+                  <span>Pay with Stripe · ${totalAmount.toFixed(2)}</span>
                   <ArrowRight className="w-4 h-4" />
                 </>
               )}

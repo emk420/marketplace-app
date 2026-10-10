@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Camera, DollarSign, X, CheckCircle2, ArrowRight, Sparkles, Tag, Plus, Info } from 'lucide-react';
+import { Camera, DollarSign, X, CheckCircle2, ArrowRight, Sparkles, Tag, Plus, Info, Upload, Check } from 'lucide-react';
 import { Item, Department, Condition } from '../types';
 import { CURRENT_USER } from '../data/mockData';
+import { uploadItemPhoto } from '../services/storageService';
 
 interface SellItemModalProps {
   isOpen: boolean;
@@ -50,11 +51,33 @@ export const SellItemModal: React.FC<SellItemModalProps> = ({
   const [discountedShipping, setDiscountedShipping] = useState(false);
   const [selectedPhoto, setSelectedPhoto] = useState(PRESET_PHOTOS[0].url);
   const [customPhotoUrl, setCustomPhotoUrl] = useState('');
+  const [uploadedStorageUrl, setUploadedStorageUrl] = useState('');
+  const [isUploading, setIsUploading] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(0);
   const [fabric, setFabric] = useState('100% Wool / Cashmere Blend');
   const [chestMeasurement, setChestMeasurement] = useState('38 in');
   const [lengthMeasurement, setLengthMeasurement] = useState('26 in');
 
   if (!isOpen) return null;
+
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    setIsUploading(true);
+    setUploadProgress(10);
+    try {
+      const res = await uploadItemPhoto(file, (pct) => {
+        setUploadProgress(pct);
+      });
+      setUploadedStorageUrl(res.url);
+      setCustomPhotoUrl('');
+    } catch (err) {
+      console.error('Upload failed:', err);
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   // Real-time Poshmark Fee & Net Earnings Math:
   // Under $15: flat $2.95 fee. $15+: 20%
@@ -72,6 +95,8 @@ export const SellItemModal: React.FC<SellItemModalProps> = ({
     e.preventDefault();
     if (!title || !brand || numListingPrice <= 0) return;
 
+    const chosenPhoto = uploadedStorageUrl || customPhotoUrl || selectedPhoto;
+
     const newItem: Item = {
       id: `item_${Date.now()}`,
       title,
@@ -85,7 +110,7 @@ export const SellItemModal: React.FC<SellItemModalProps> = ({
       originalPrice: parseFloat(originalPrice) || numListingPrice * 2,
       listingPrice: numListingPrice,
       discountedShipping,
-      photos: [customPhotoUrl || selectedPhoto],
+      photos: [chosenPhoto],
       sellerId: CURRENT_USER.id,
       sellerName: CURRENT_USER.name,
       sellerHandle: CURRENT_USER.handle,
@@ -129,31 +154,92 @@ export const SellItemModal: React.FC<SellItemModalProps> = ({
         {/* Scrollable Form Body */}
         <form onSubmit={handleSubmit} className="overflow-y-auto p-6 space-y-6 flex-1">
           {/* Photos Selection */}
-          <div>
-            <label className="block text-xs font-bold text-stone-900 mb-2">
-              Item Photos (Cover Photo)
-            </label>
-            <div className="grid grid-cols-5 gap-2 mb-3">
-              {PRESET_PHOTOS.map((p, idx) => (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-stone-900">
+                Item Photos (Cover Photo)
+              </label>
+              <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1 bg-stone-900 hover:bg-stone-800 text-white text-xs font-semibold rounded-lg transition-colors shadow-2xs">
+                <Upload className="w-3.5 h-3.5" />
+                <span>Upload from Device</span>
+                <input
+                  type="file"
+                  accept="image/png, image/jpeg, image/webp"
+                  onChange={handleFileUpload}
+                  disabled={isUploading}
+                  className="hidden"
+                />
+              </label>
+            </div>
+
+            {/* Uploading progress bar */}
+            {isUploading && (
+              <div className="p-3 bg-stone-50 border border-stone-200 rounded-lg text-xs space-y-1.5 animate-pulse">
+                <div className="flex justify-between font-semibold text-stone-700">
+                  <span>Uploading to Firebase Storage...</span>
+                  <span>{uploadProgress}%</span>
+                </div>
+                <div className="w-full h-1.5 bg-stone-200 rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-rose-600 transition-all duration-300"
+                    style={{ width: `${uploadProgress}%` }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {/* Active uploaded photo notification */}
+            {uploadedStorageUrl && (
+              <div className="flex items-center gap-3 p-2.5 bg-emerald-50 border border-emerald-200 rounded-lg text-xs text-emerald-900">
+                <img
+                  src={uploadedStorageUrl}
+                  alt="Uploaded preview"
+                  className="w-12 h-12 object-cover rounded border border-emerald-300 shrink-0"
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="font-bold flex items-center gap-1 text-emerald-800">
+                    <Check className="w-3.5 h-3.5" /> Uploaded to Cloud Storage
+                  </div>
+                  <p className="text-[11px] text-emerald-700 truncate">Image ready for marketplace listing</p>
+                </div>
                 <button
-                  key={idx}
                   type="button"
-                  onClick={() => {
-                    setSelectedPhoto(p.url);
-                    setCustomPhotoUrl('');
-                  }}
-                  className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
-                    selectedPhoto === p.url && !customPhotoUrl
-                      ? 'border-stone-900 ring-2 ring-stone-900/20'
-                      : 'border-stone-200 hover:border-stone-300'
-                  }`}
+                  onClick={() => setUploadedStorageUrl('')}
+                  className="text-emerald-800 hover:text-emerald-950 text-xs font-semibold px-2 py-1"
                 >
-                  <img src={p.url} alt={p.name} className="w-full h-full object-cover" />
-                  <span className="absolute bottom-0 inset-x-0 bg-black/60 text-[9px] text-white py-0.5 text-center truncate px-1">
-                    {p.name.split(' ')[0]}
-                  </span>
+                  Remove
                 </button>
-              ))}
+              </div>
+            )}
+
+            {/* Presets Grid */}
+            <div className="space-y-1.5">
+              <span className="text-[11px] font-semibold text-stone-500 block">
+                Or select from curated styling presets:
+              </span>
+              <div className="grid grid-cols-5 gap-2">
+                {PRESET_PHOTOS.map((p, idx) => (
+                  <button
+                    key={idx}
+                    type="button"
+                    onClick={() => {
+                      setSelectedPhoto(p.url);
+                      setUploadedStorageUrl('');
+                      setCustomPhotoUrl('');
+                    }}
+                    className={`relative aspect-square rounded-lg overflow-hidden border-2 transition-all ${
+                      selectedPhoto === p.url && !customPhotoUrl && !uploadedStorageUrl
+                        ? 'border-stone-900 ring-2 ring-stone-900/20'
+                        : 'border-stone-200 hover:border-stone-300'
+                    }`}
+                  >
+                    <img src={p.url} alt={p.name} className="w-full h-full object-cover" />
+                    <span className="absolute bottom-0 inset-x-0 bg-black/60 text-[9px] text-white py-0.5 text-center truncate px-1">
+                      {p.name.split(' ')[0]}
+                    </span>
+                  </button>
+                ))}
+              </div>
             </div>
 
             <div className="flex items-center gap-2 text-xs">
@@ -162,7 +248,10 @@ export const SellItemModal: React.FC<SellItemModalProps> = ({
                 type="text"
                 placeholder="https://..."
                 value={customPhotoUrl}
-                onChange={(e) => setCustomPhotoUrl(e.target.value)}
+                onChange={(e) => {
+                  setCustomPhotoUrl(e.target.value);
+                  setUploadedStorageUrl('');
+                }}
                 className="flex-1 px-2.5 py-1 text-xs border border-stone-300 rounded focus:ring-1 focus:ring-stone-900"
               />
             </div>

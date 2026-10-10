@@ -104,6 +104,8 @@ export interface Order {
   deliveredAt?: string;
   paymentMethod: string;
   paymentEscrowProtected: boolean;
+  stripePaymentIntentId?: string;
+  stripeClientSecret?: string;
   createdAt: string;
   buyerRating?: number;
   buyerLoveNote?: string;

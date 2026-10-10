@@ -1,0 +1,38 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <defs>
+    <linearGradient id="poshBg" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#f43f5e" />
+      <stop offset="50%" stop-color="#e11d48" />
+      <stop offset="100%" stop-color="#9f1239" />
+    </linearGradient>
+    <linearGradient id="goldAcc" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#fef08a" />
+      <stop offset="100%" stop-color="#f59e0b" />
+    </linearGradient>
+    <filter id="shadow" x="-10%" y="-10%" width="120%" height="120%">
+      <feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#000000" flood-opacity="0.25" />
+    </filter>
+  </defs>
+
+  <!-- Squircle Base Canvas -->
+  <rect width="64" height="64" rx="16" fill="url(#poshBg)" />
+
+  <!-- Inner subtle border -->
+  <rect x="2" y="2" width="60" height="60" rx="14" stroke="#ffffff" stroke-opacity="0.2" stroke-width="1.5" />
+
+  <!-- Shopping Tote / Hanger Handle -->
+  <path d="M24 23 C24 16, 40 16, 40 23" stroke="#ffffff" stroke-width="3" stroke-linecap="round" fill="none" opacity="0.9" />
+
+  <!-- Bag / Tag Body with 'P' Cutout Motif -->
+  <g filter="url(#shadow)">
+    <!-- Main Tote Body -->
+    <path d="M16 23 L48 23 L45 49 C44.8 51.5 42.8 53 40.5 53 L23.5 53 C21.2 53 19.2 51.5 19 49 Z" fill="#ffffff" />
+    
+    <!-- Bold 'P' Monogram in Rose -->
+    <path d="M27 30 L36 30 C38.5 30 40 31.5 40 34 C40 36.5 38.5 38 36 38 L30.5 38 L30.5 46 L27 46 Z" fill="#e11d48" />
+    <path d="M30.5 33 L35 33 C36 33 36.8 33.4 36.8 34 C36.8 34.6 36 35 35 35 L30.5 35 Z" fill="#ffffff" />
+
+    <!-- Sparkle / Tag Star -->
+    <path d="M44 26 L45.2 29.5 L48.7 30.7 L45.2 31.9 L44 35.4 L42.8 31.9 L39.3 30.7 L42.8 29.5 Z" fill="url(#goldAcc)" />
+  </g>
+</svg>

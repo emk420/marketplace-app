@@ -288,6 +288,11 @@ export const OrderManagementModal: React.FC<OrderManagementModalProps> = ({
                         <p className="text-xs text-stone-500 mt-0.5">
                           Paid: ${order.totalAmount.toFixed(2)} via {order.paymentMethod}
                         </p>
+                        {order.stripePaymentIntentId && (
+                          <p className="text-[10px] text-emerald-700 font-mono mt-0.5">
+                            Stripe Intent: {order.stripePaymentIntentId}
+                          </p>
+                        )}
                         <p className="text-xs text-stone-600 mt-1 font-mono">
                           USPS Priority Track #{order.trackingNumber}
                         </p>

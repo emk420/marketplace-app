@@ -40,6 +40,7 @@ import { ClosetViewModal } from './components/ClosetViewModal';
 import { ShippingLabelModal } from './components/ShippingLabelModal';
 import { SellItemModal } from './components/SellItemModal';
 import { OrderManagementModal } from './components/OrderManagementModal';
+import { FirebaseDiagnosticsModal } from './components/FirebaseDiagnosticsModal';
 import { AuthProvider, useAuth } from './context/AuthContext';
 import {
   initializeMarketplaceData,
@@ -120,6 +121,7 @@ function MarketplaceApp() {
   const [labelOrder, setLabelOrder] = useState<Order | null>(null);
   const [isSellOpen, setIsSellOpen] = useState(false);
   const [isOrdersOpen, setIsOrdersOpen] = useState(false);
+  const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [ordersModalTab, setOrdersModalTab] = useState<'sales' | 'purchases' | 'offers' | 'payouts'>('sales');
 
   // Toast banner
@@ -649,6 +651,14 @@ function MarketplaceApp() {
             <span>USPS Priority Commercial</span>
             <span aria-hidden="true">·</span>
             <span>Zero Listing Fees</span>
+            <span aria-hidden="true">·</span>
+            <button
+              onClick={() => setIsDiagnosticsOpen(true)}
+              className="text-stone-700 hover:text-stone-900 transition-colors flex items-center gap-1.5 cursor-pointer font-medium"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 inline-block" />
+              <span>Firebase & Storage Status</span>
+            </button>
           </div>
         </div>
       </footer>
@@ -760,6 +770,14 @@ function MarketplaceApp() {
           userBalance={userBalance}
           onWithdrawFunds={handleWithdrawFunds}
           initialTab={ordersModalTab}
+        />
+      )}
+
+      {/* 9. Firebase & Firestore Live Diagnostics */}
+      {isDiagnosticsOpen && (
+        <FirebaseDiagnosticsModal
+          isOpen={isDiagnosticsOpen}
+          onClose={() => setIsDiagnosticsOpen(false)}
         />
       )}
     </div>

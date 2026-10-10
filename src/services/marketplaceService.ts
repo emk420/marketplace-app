@@ -4,12 +4,9 @@ import {
   setDoc,
   getDocs,
   onSnapshot,
-  updateDoc,
-  query,
-  where,
-  orderBy
+  updateDoc
 } from 'firebase/firestore';
-import { db } from '../lib/firebase';
+import { db, auth } from '../lib/firebase';
 import { handleFirestoreError, OperationType } from '../lib/firestoreErrors';
 import { Item, Order, Offer } from '../types';
 import { INITIAL_ITEMS } from '../data/mockData';
@@ -18,14 +15,26 @@ export async function initializeMarketplaceData() {
   const itemsCollection = collection(db, 'items');
   try {
     const snap = await getDocs(itemsCollection);
-    if (snap.empty) {
-      // Seed initial mock items to Firestore
+    // If database already contains items, live catalog is ready
+    if (!snap.empty) {
+      return;
+    }
+
+    // If empty and current user is logged in, seed under current auth UID
+    if (auth.currentUser) {
       for (const item of INITIAL_ITEMS) {
-        await setDoc(doc(db, 'items', item.id), item);
+        try {
+          await setDoc(doc(db, 'items', item.id), {
+            ...item,
+            sellerId: auth.currentUser.uid,
+          });
+        } catch (e) {
+          console.warn('Seeding item skipped:', e);
+        }
       }
     }
   } catch (err) {
-    handleFirestoreError(err, OperationType.LIST, 'items');
+    console.warn('Marketplace cloud connection check:', err);
   }
 }
 
@@ -41,16 +50,22 @@ export function subscribeToItems(
       snapshot.forEach((d) => {
         itemsList.push(d.data() as Item);
       });
-      onData(itemsList);
+      if (itemsList.length > 0) {
+        onData(itemsList);
+      }
     },
     (err) => {
       if (onError) onError(err);
-      handleFirestoreError(err, OperationType.GET, 'items');
+      console.warn('Firestore subscription status:', err.message);
     }
   );
 }
 
 export async function saveItemToFirestore(item: Item) {
+  if (!auth.currentUser) {
+    console.info('Item saved to local state. Sign in with Google to sync directly to cloud.');
+    return;
+  }
   try {
     await setDoc(doc(db, 'items', item.id), item);
   } catch (err) {
@@ -59,6 +74,10 @@ export async function saveItemToFirestore(item: Item) {
 }
 
 export async function updateItemInteraction(itemId: string, likes: number, shares: number) {
+  if (!auth.currentUser) {
+    // Guest likes remain reactive in local state
+    return;
+  }
   try {
     await updateDoc(doc(db, 'items', itemId), { likes, shares });
   } catch (err) {
@@ -67,6 +86,10 @@ export async function updateItemInteraction(itemId: string, likes: number, share
 }
 
 export async function saveOrderToFirestore(order: Order) {
+  if (!auth.currentUser) {
+    console.info('Order recorded in local escrow ledger.');
+    return;
+  }
   try {
     await setDoc(doc(db, 'orders', order.id), order);
   } catch (err) {
@@ -79,6 +102,7 @@ export async function updateOrderStatusInFirestore(
   status: Order['status'],
   additionalFields: Partial<Order> = {}
 ) {
+  if (!auth.currentUser) return;
   try {
     await updateDoc(doc(db, 'orders', orderId), {
       status,
@@ -90,6 +114,7 @@ export async function updateOrderStatusInFirestore(
 }
 
 export async function saveOfferToFirestore(offer: Offer) {
+  if (!auth.currentUser) return;
   try {
     await setDoc(doc(db, 'offers', offer.id), offer);
   } catch (err) {
@@ -98,6 +123,7 @@ export async function saveOfferToFirestore(offer: Offer) {
 }
 
 export async function updateOfferStatusInFirestore(offerId: string, status: Offer['status']) {
+  if (!auth.currentUser) return;
   try {
     await updateDoc(doc(db, 'offers', offerId), { status });
   } catch (err) {
