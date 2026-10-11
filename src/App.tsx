@@ -174,9 +174,15 @@ function MarketplaceApp() {
   };
 
   const handleOrderCompleted = (newOrder: Order) => {
-    setOrders((prev) => [newOrder, ...prev]);
-    saveOrderToFirestore(newOrder).catch(console.error);
-    showToast(`Order #${newOrder.orderNumber} confirmed! Escrow authorized with USPS Priority.`);
+    const finalOrder: Order = {
+      ...newOrder,
+      buyerId: user?.uid || newOrder.buyerId,
+      buyerHandle: userProfile?.handle || newOrder.buyerHandle,
+      buyerName: user?.displayName || userProfile?.name || newOrder.buyerName,
+    };
+    setOrders((prev) => [finalOrder, ...prev]);
+    saveOrderToFirestore(finalOrder).catch(console.error);
+    showToast(`Order #${finalOrder.orderNumber} confirmed! Escrow authorized with USPS Priority.`);
   };
 
   const handleItemCreated = (newItem: Item) => {

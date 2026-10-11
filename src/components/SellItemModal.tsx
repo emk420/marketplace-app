@@ -3,6 +3,7 @@ import { Camera, DollarSign, X, CheckCircle2, ArrowRight, Sparkles, Tag, Plus, I
 import { Item, Department, Condition } from '../types';
 import { CURRENT_USER } from '../data/mockData';
 import { uploadItemPhoto } from '../services/storageService';
+import { useAuth } from '../context/AuthContext';
 
 interface SellItemModalProps {
   isOpen: boolean;
@@ -38,6 +39,7 @@ export const SellItemModal: React.FC<SellItemModalProps> = ({
   onClose,
   onItemCreated
 }) => {
+  const { user, userProfile } = useAuth();
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [brand, setBrand] = useState('');
@@ -111,10 +113,10 @@ export const SellItemModal: React.FC<SellItemModalProps> = ({
       listingPrice: numListingPrice,
       discountedShipping,
       photos: [chosenPhoto],
-      sellerId: CURRENT_USER.id,
-      sellerName: CURRENT_USER.name,
-      sellerHandle: CURRENT_USER.handle,
-      sellerAvatar: CURRENT_USER.avatar,
+      sellerId: user?.uid || CURRENT_USER.id,
+      sellerName: user?.displayName || userProfile?.name || CURRENT_USER.name,
+      sellerHandle: userProfile?.handle || CURRENT_USER.handle,
+      sellerAvatar: user?.photoURL || userProfile?.avatar || CURRENT_USER.avatar,
       sellerRating: 5.0,
       sellerSalesCount: 14,
       sellerBadges: ['Posh Ambassador I', 'Fast Shipper'],

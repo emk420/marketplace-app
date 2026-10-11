@@ -3,6 +3,7 @@ import { Tag, X, ArrowRight, CheckCircle2, ShieldCheck, DollarSign } from 'lucid
 import { Item, Offer } from '../types';
 import { CURRENT_USER } from '../data/mockData';
 import { FashionImage } from './FashionImage';
+import { useAuth } from '../context/AuthContext';
 
 interface OfferModalProps {
   item: Item;
@@ -17,6 +18,7 @@ export const OfferModal: React.FC<OfferModalProps> = ({
   onClose,
   onOfferSubmitted
 }) => {
+  const { user, userProfile } = useAuth();
   const [offerPrice, setOfferPrice] = useState<number>(Math.round(item.listingPrice * 0.85));
   const [submitted, setSubmitted] = useState(false);
 
@@ -41,9 +43,9 @@ export const OfferModal: React.FC<OfferModalProps> = ({
       itemSize: item.size,
       originalListingPrice: item.listingPrice,
       offeredPrice: offerPrice,
-      buyerId: CURRENT_USER.id,
-      buyerHandle: CURRENT_USER.handle,
-      buyerName: CURRENT_USER.name,
+      buyerId: user?.uid || CURRENT_USER.id,
+      buyerHandle: userProfile?.handle || CURRENT_USER.handle,
+      buyerName: user?.displayName || userProfile?.name || CURRENT_USER.name,
       sellerId: item.sellerId,
       sellerHandle: item.sellerHandle,
       status: offerPrice >= item.listingPrice * 0.9 ? 'accepted' : 'pending',

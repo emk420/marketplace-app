@@ -23,6 +23,7 @@ import {
   formatExpiry,
   getCardBrand
 } from '../services/stripeService';
+import { useAuth } from '../context/AuthContext';
 
 interface SecureCheckoutModalProps {
   item: Item;
@@ -37,6 +38,7 @@ export const SecureCheckoutModal: React.FC<SecureCheckoutModalProps> = ({
   onClose,
   onOrderCompleted
 }) => {
+  const { user, userProfile } = useAuth();
   const [useCredits, setUseCredits] = useState(true);
   const [paymentMethod, setPaymentMethod] = useState<'stripe_card' | 'apple_pay' | 'klarna'>('stripe_card');
   const [isProcessing, setIsProcessing] = useState(false);
@@ -119,9 +121,9 @@ export const SecureCheckoutModal: React.FC<SecureCheckoutModalProps> = ({
         totalAmount,
         poshCreditsUsed: creditsApplied,
         netPayoutToSeller,
-        buyerId: CURRENT_USER.id,
-        buyerName: buyerAddress.fullName,
-        buyerHandle: CURRENT_USER.handle,
+        buyerId: user?.uid || CURRENT_USER.id,
+        buyerName: user?.displayName || buyerAddress.fullName,
+        buyerHandle: userProfile?.handle || CURRENT_USER.handle,
         buyerAddress,
         sellerId: item.sellerId,
         sellerName: item.sellerName,
